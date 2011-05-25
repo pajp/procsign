@@ -10,7 +10,7 @@ use Mac::Processes;
 
 my @hiddenchains;
 my $hideapple = 0;
-if ($ARGV[0] eq "--hide-apple") {
+if ($ARGV[0] && $ARGV[0] eq "--hide-apple") {
   push @hiddenchains, "Software Signing/Apple Code Signing Certification Authority/Apple Root CA";
 }
 
