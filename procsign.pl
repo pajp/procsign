@@ -13,8 +13,28 @@ my $color = 1;
 $color = 0 if $ENV{'NOCOLOR'};
 my @hiddenchains;
 my $hideapple = 0;
-if ($ARGV[0] && $ARGV[0] eq "--hide-apple") {
-  push @hiddenchains, "Software Signing/Apple Code Signing Certification Authority/Apple Root CA";
+my $unsigned_in_summary = 1;
+my $optc = $#ARGV + 1;
+for (@ARGV) {
+  if ($_ eq "--hide-apple") {
+    push @hiddenchains, "Software Signing/Apple Code Signing Certification Authority/Apple Root CA";
+    $optc--;
+  }
+  if ($_ eq "--no-color") {
+    $color = 0;
+    $optc--;
+  }
+  if ($_ eq "--no-unsigned-summary") {
+    $unsigned_in_summary = 0;
+    $optc--;
+  }
+}
+if ($optc) {
+  print "Usage:\n";
+  print "\t$0 [--hide-apple] [--no-color] [no-unsigned-summary]\n";
+  print "\n(you may have to set the environment variable
+VERSIONER_PERL_PREFER_32_BIT=yes on an x86_64 machine)\n";
+  exit 1;
 }
 
 my %process_signed_by;
@@ -26,7 +46,7 @@ while ( ($psn, $psi) = each(%Process) ) {
 
   print color 'red' if $color;
   if (system("codesign -v $pid 2>&1")) {
-    print color 'reset' if $color;
+    print color 'blue' if $color;
     print "\t" . $executable . "\n";
   }
   print color 'reset' if $color;
@@ -62,6 +82,9 @@ CHAIN: for (sort keys %process_signed_by) {
     print color 'green' if $color;
     print ":\n";
   } else {
+    if (!$unsigned_in_summary) {
+      next;
+    }
     print "\nUnsigned processes:\n";
   }
   for (@psis) {
