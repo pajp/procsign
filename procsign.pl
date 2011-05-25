@@ -6,6 +6,9 @@
 # on x86_64 systems, run with:
 #   VERSIONER_PERL_PREFER_32_BIT=yes ./procsign.pl
 
+# TODO: option to show interpreters such as Perl even with --hide-apple
+# because they may run arbitrary unsigned code
+
 use Mac::Processes;
 use Term::ANSIColor;
 
