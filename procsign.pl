@@ -7,7 +7,10 @@
 #   VERSIONER_PERL_PREFER_32_BIT=yes ./procsign.pl
 
 use Mac::Processes;
+use Term::ANSIColor;
 
+my $color = 1;
+$color = 0 if $ENV{'NOCOLOR'};
 my @hiddenchains;
 my $hideapple = 0;
 if ($ARGV[0] && $ARGV[0] eq "--hide-apple") {
@@ -21,9 +24,12 @@ while ( ($psn, $psi) = each(%Process) ) {
   my $pid = GetProcessPID($psn);
   my @signdata = split /\n/, `codesign -dvvv "$executable" 2>&1`;
 
+  print color 'red' if $color;
   if (system("codesign -v $pid 2>&1")) {
+    print color 'reset' if $color;
     print "\t" . $executable . "\n";
   }
+  print color 'reset' if $color;
   for (@signdata) {
     chomp;
     my ($key, $value) = split /=/, $_, 2;
@@ -50,7 +56,11 @@ CHAIN: for (sort keys %process_signed_by) {
     next CHAIN if $_ eq $path;
   }
   if ($path) {
-    print "\nProcesses signed by $path:\n";
+    print "\nProcesses signed by ";
+    print color 'green' if $color;
+    print "$path";
+    print color 'green' if $color;
+    print ":\n";
   } else {
     print "\nUnsigned processes:\n";
   }
@@ -59,11 +69,14 @@ CHAIN: for (sort keys %process_signed_by) {
     if ($lastapp eq $psi->processAppSpec) {
       $apprepeatcount++;
     } else {
+      print color 'blue' if $color;
       if ($apprepeatcount > 0) {
 	print "\t (x" . $apprepeatcount . ")\n";
       }
       $apprepeatcount=0;
-      print "\t" . $psi->processAppSpec . " (pid " .GetProcessPID($psi->processNumber). ")\n";
+      print "\t" . $psi->processAppSpec;
+      print color 'reset' if $color;
+      print " (pid " .GetProcessPID($psi->processNumber). ")\n";
     }
     $lastapp = $psi->processAppSpec;
   }
