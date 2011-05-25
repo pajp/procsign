@@ -3,6 +3,8 @@
 # of all running processes, as well as printing them grouped by certificate
 # chain.
 #
+# on x86_64 systems, run with:
+#   VERSIONER_PERL_PREFER_32_BIT=yes ./procsign.pl
 
 use Mac::Processes;
 
