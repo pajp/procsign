@@ -1,4 +1,4 @@
-#
+#!/usr/bin/perl -w
 # This program uses the codesign(1) program to validate the signature
 # of all running processes, as well as printing them grouped by certificate
 # chain.
