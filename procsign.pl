@@ -15,14 +15,11 @@ while ( ($psn, $psi) = each(%Process) ) {
     my ($key, $value) = split /=/, $_, 2;
     $ps{$psn}{'signdata'}{$key} = [ ] unless $ps{$psn}{'signdata'}{$key};
     push @{$ps{$psn}{'signdata'}{$key}}, $value unless $value eq "";
-    #print "$key:$value --> ".$ps{$psn}{'signdata'}{$key}."\n";
-    #print "..." . join("/", @{$ps{$psn}{'signdata'}{$key}}) . "\n";
   }
   my $path = join('/', @{$ps{$psn}{'signdata'}{'Authority'}});
   $ps{$psn}{'signpath'} = $path;
   $process_signed_by{$path} = [ ] unless $process_signed_by{$path};
   push @{$process_signed_by{$path}}, $psi;
-  #print $psi->processName . "\t" . $ps{$psn}{'signpath'} . "\n";
 }
 
 my $lastapp = "";
