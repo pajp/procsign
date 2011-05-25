@@ -8,6 +8,12 @@
 
 use Mac::Processes;
 
+my @hiddenchains;
+my $hideapple = 0;
+if ($ARGV[0] eq "--hide-apple") {
+  push @hiddenchains, "Software Signing/Apple Code Signing Certification Authority/Apple Root CA";
+}
+
 my %process_signed_by;
 my %ps;
 while ( ($psn, $psi) = each(%Process) ) {
@@ -36,9 +42,13 @@ while ( ($psn, $psi) = each(%Process) ) {
 
 my $lastapp = "";
 my $apprepeatcount = 0;
-for (sort keys %process_signed_by) {
+CHAIN: for (sort keys %process_signed_by) {
   my $path = $_;
   my @psis = @{$process_signed_by{$path}};
+  my $hidden = 0;
+  for (@hiddenchains) {
+    next CHAIN if $_ eq $path;
+  }
   if ($path) {
     print "\nProcesses signed by $path:\n";
   } else {
