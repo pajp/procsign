@@ -22,7 +22,9 @@ while ( ($psn, $psi) = each(%Process) ) {
     chomp;
     my ($key, $value) = split /=/, $_, 2;
     $ps{$psn}{'signdata'}{$key} = [ ] unless $ps{$psn}{'signdata'}{$key};
-    push @{$ps{$psn}{'signdata'}{$key}}, $value unless $value && $value eq "";
+    if ($value && $value ne "") {
+      push @{$ps{$psn}{'signdata'}{$key}}, $value;
+    }
   }
 
   my $path = "";
