@@ -21,7 +21,7 @@ while ( ($psn, $psi) = each(%Process) ) {
   my $pid = GetProcessPID($psn);
   my @signdata = split /\n/, `codesign -dvvv "$executable" 2>&1`;
 
-  if (system("codesign -v $pid")) {
+  if (system("codesign -v $pid 2>&1")) {
     print "\t" . $executable . "\n";
   }
   for (@signdata) {
