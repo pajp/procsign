@@ -41,6 +41,7 @@ VERSIONER_PERL_PREFER_32_BIT=yes on an x86_64 machine)\n";
 }
 
 my %process_signed_by;
+my %chain_count;
 my %ps;
 while ( ($psn, $psi) = each(%Process) ) {
   my $executable = $psi->processAppSpec;
@@ -64,6 +65,7 @@ while ( ($psn, $psi) = each(%Process) ) {
 
   my $path = "";
   $path = join('/', @{$ps{$psn}{'signdata'}{'Authority'}}) if $ps{$psn}{'signdata'}{'Authority'};
+  $chain_count{$path} = $#{$ps{$psn}{'signdata'}{'Authority'}}+1 if $ps{$psn}{'signdata'}{'Authority'};
   $ps{$psn}{'signpath'} = $path;
   $process_signed_by{$path} = [ ] unless $process_signed_by{$path};
   push @{$process_signed_by{$path}}, $psi;
@@ -82,7 +84,13 @@ CHAIN: for (sort keys %process_signed_by) {
     print "\nProcesses signed by ";
     print color 'green' if $color;
     print "$path";
-    print color 'green' if $color;
+    if ($chain_count{$path} < 2) {
+      print color 'yellow' if $color;
+      print ' (self-signed)';
+    } else {
+      print color 'green' if $color;
+    }
+    print color 'reset';
     print ":\n";
   } else {
     if (!$unsigned_in_summary) {
