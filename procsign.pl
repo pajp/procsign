@@ -19,6 +19,7 @@ my @hiddenchains;
 my $hideapple = 0;
 my $unsigned_in_summary = 1;
 my $warnuntrusted = 1;
+my $appleanchorcheck = 1;
 my $optc = $#ARGV + 1;
 for (@ARGV) {
     if ($_ eq "--hide-apple") {
@@ -52,6 +53,13 @@ my %ps;
 while ( ($psn, $psi) = each(%Process) ) {
     my $executable = $psi->processAppSpec;
     my $pid = GetProcessPID($psn);
+    if ($hideapple && $appleanchorcheck) {
+	my $applecsrc = system('codesign -R="anchor apple" -v ' . $pid . ' > /dev/null 2>&1');
+	$applecsrc >>= 8;
+	if ($applecsrc == 0) {
+	    next;
+	}
+    }
     my @signdata = split /\n/, `codesign -dvvv "$executable" 2>&1`;
 
     my $csargs = '';
