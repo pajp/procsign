@@ -18,10 +18,15 @@ $color = 0 if $ENV{'NOCOLOR'};
 my @hiddenchains;
 my $hideapple = 0;
 my $unsigned_in_summary = 1;
+my $warnuntrusted = 1;
 my $optc = $#ARGV + 1;
 for (@ARGV) {
     if ($_ eq "--hide-apple") {
 	push @hiddenchains, "Software Signing/Apple Code Signing Certification Authority/Apple Root CA";
+	$optc--;
+    }
+    if ($_ eq "--dont-check-trust") {
+	$warnuntrusted = 0;
 	$optc--;
     }
     if ($_ eq "--no-color") {
@@ -42,19 +47,20 @@ VERSIONER_PERL_PREFER_32_BIT=yes on an x86_64 machine)\n";
 }
 
 my %process_signed_by;
-my %chain_count;
+my %last_validation_failure;
 my %ps;
 while ( ($psn, $psi) = each(%Process) ) {
     my $executable = $psi->processAppSpec;
     my $pid = GetProcessPID($psn);
     my @signdata = split /\n/, `codesign -dvvv "$executable" 2>&1`;
 
-    print color 'red' if $color;
-    if (system("codesign -v $pid 2>&1")) {
-	print color 'blue' if $color;
-	print "\t" . $executable . "\n";
+    my $csargs = '';
+    if ($warnuntrusted) {
+	$csargs .= '-R="anchor trusted"';
     }
-    print color 'reset' if $color;
+    my $csrc = system("codesign $csargs -v $pid > /dev/null 2>&1");
+    $csrc >>= 8;
+
     for (@signdata) {
 	chomp;
 	my ($key, $value) = split /=/, $_, 2;
@@ -63,11 +69,11 @@ while ( ($psn, $psi) = each(%Process) ) {
 	    push @{$ps{$psn}{'signdata'}{$key}}, $value;
 	}
     }
-
+    $ps{$psn}{'csrc'} = $csrc;
     my $path = "";
     $path = join('/', @{$ps{$psn}{'signdata'}{'Authority'}}) if $ps{$psn}{'signdata'}{'Authority'};
-    $chain_count{$path} = $#{$ps{$psn}{'signdata'}{'Authority'}}+1 if $ps{$psn}{'signdata'}{'Authority'};
     $ps{$psn}{'signpath'} = $path;
+    $last_validation_failure{$path} = $csrc;
     $process_signed_by{$path} = [ ] unless $process_signed_by{$path};
     push @{$process_signed_by{$path}}, $psi;
 }
@@ -85,9 +91,9 @@ CHAIN: for (sort keys %process_signed_by) {
 	print "\nProcesses signed by ";
 	print color 'green' if $color;
 	print "$path";
-	if ($chain_count{$path} < 2) {
-	    print color 'yellow' if $color;
-	    print ' (self-signed)';
+	if ($last_validation_failure{$path} == 3) {
+	    print color 'red' if $color;
+	    print ' (self-signed or untrusted CA)';
 	} else {
 	    print color 'green' if $color;
 	}
@@ -97,7 +103,7 @@ CHAIN: for (sort keys %process_signed_by) {
 	if (!$unsigned_in_summary) {
 	    next;
 	}
-	print "\nUnsigned processes:\n";
+	print "\nUnsigned or self-signed processes:\n";
     }
     for (@psis) {
 	my $psi = $_;
@@ -110,8 +116,13 @@ CHAIN: for (sort keys %process_signed_by) {
 	    }
 	    $apprepeatcount=0;
 	    print "\t" . $psi->processAppSpec;
+	    if ($ps{$psi->processNumber}{'csrc'} == 3 && $#{$ps{$psi->processNumber}{'signdata'}{'Authority'}} == -1) {
+		print color 'yellow';
+		print (" (self-signed)");
+	    }
 	    print color 'reset' if $color;
 	    print " (pid " .GetProcessPID($psi->processNumber). ")\n";
+
 	}
 	$lastapp = $psi->processAppSpec;
     }
