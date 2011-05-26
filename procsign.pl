@@ -47,10 +47,22 @@ VERSIONER_PERL_PREFER_32_BIT=yes on an x86_64 machine)\n";
     exit 1;
 }
 
+my @wheel = ( '|', '/', '-', '\\' );
+my @colors = ( 'blue', 'magenta', 'red', 'yellow', 'green', 'white' );
+my $wid = 0;
+my $cid = 0;
 my %process_signed_by;
 my %last_validation_failure;
 my %ps;
+print 'Examining running processes... ';
 while ( ($psn, $psi) = each(%Process) ) {
+    print chr(8);
+    print color $colors[$cid++] if $color;
+    print $wheel[$wid++];
+    $wid = 0 if ($wid > $#wheel);
+    $cid = 0 if ($cid > $#colors);
+    print color 'reset' if $color;
+
     my $executable = $psi->processAppSpec;
     my $pid = GetProcessPID($psn);
     if ($hideapple && $appleanchorcheck) {
@@ -66,6 +78,7 @@ while ( ($psn, $psi) = each(%Process) ) {
     if ($warnuntrusted) {
 	$csargs .= '-R="anchor trusted"';
     }
+
     my $csrc = system("codesign $csargs -v $pid > /dev/null 2>&1");
     $csrc >>= 8;
 
@@ -85,9 +98,13 @@ while ( ($psn, $psi) = each(%Process) ) {
     $process_signed_by{$path} = [ ] unless $process_signed_by{$path};
     push @{$process_signed_by{$path}}, $psi;
 }
+print chr(8) x 40;
+print ' ' x 40;
+print chr(8) x 40;
 
 my $lastapp = "";
 my $apprepeatcount = 0;
+my $first = 1;
 CHAIN: for (sort keys %process_signed_by) {
     my $path = $_;
     my @psis = @{$process_signed_by{$path}};
@@ -95,8 +112,10 @@ CHAIN: for (sort keys %process_signed_by) {
     for (@hiddenchains) {
 	next CHAIN if $_ eq $path;
     }
+    print "\n" unless $first;
+    $first = 0 if $first;
     if ($path) {
-	print "\nProcesses signed by ";
+	print "Processes signed by ";
 	print color 'green' if $color;
 	print "$path";
 	if ($last_validation_failure{$path} == 3) {
@@ -111,7 +130,7 @@ CHAIN: for (sort keys %process_signed_by) {
 	if (!$unsigned_in_summary) {
 	    next;
 	}
-	print "\nUnsigned or self-signed processes:\n";
+	print "Unsigned or self-signed processes:\n";
     }
     for (@psis) {
 	my $psi = $_;
