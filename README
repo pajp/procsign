@@ -1,6 +1,6 @@
 procsign.pl
 -----------
 
-A simple Perl script that examines (some) running processes on a Mac
-OS X system, reports their code signatures in a person-readable form
-as well as verifies that the signature comes from a trusted CA.
+A simple Perl script that examines running processes on a Mac OS X
+system, reports their code signatures in a person-readable form as
+well as verifies that the signature comes from a trusted CA.
