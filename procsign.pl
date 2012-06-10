@@ -11,7 +11,6 @@
 # because they may run arbitrary unsigned code
 
 use Term::ANSIColor;
-use Mac::Processes;
 
 my $color = 1;
 $color = 0 if $ENV{'NOCOLOR'};
@@ -132,6 +131,7 @@ sub examineprocess {
 }
 
 if ($stage1) {
+    require Mac::Processes;
     print 'Examining running processes... (stage 1)  ';
     while ( ($psn, $psi) = each(%Process) ) {
 	my $executable = $psi->processAppSpec;
