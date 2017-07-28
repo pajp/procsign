@@ -4,20 +4,17 @@
 # of all running processes, as well as printing them grouped by certificate
 # chain.
 
-# TODO: option to show interpreters such as Perl even with --hide-apple
-# because they may run arbitrary unsigned code
-
 use Term::ANSIColor;
 
 my $color = 1;
 $color = 0 if $ENV{'NOCOLOR'};
+my @interpreters = ("ruby", "perl5", "python", "bash", "sh");
 my @hiddenchains;
-my $hideapple = 0;
 my $unsigned_in_summary = 1;
 my $warnuntrusted = 1;
 my $appleanchorcheck = 1;
 my $optc = $#ARGV + 1;
-my $stage1 = 1;
+my $stage1 = 0;
 my $stage2 = 1;
 for (@ARGV) {
     if ($_ eq "--hide-apple") {
@@ -36,12 +33,9 @@ for (@ARGV) {
 	$unsigned_in_summary = 0;
 	$optc--;
     }
-    if ($_ eq "--no-session") {
-	$stage1 = 0;
-	$optc--;
-    }
     if ($_ eq "--in-session") {
 	$stage2 = 0;
+	$stage1 = 1;
 	$optc--;
     }
 }
@@ -60,19 +54,24 @@ my %last_validation_failure;
 my %ps;
 my %pids;
 
+sub isinterpreter {
+    my ($signdata) = @_;
+    for (@interpreters) {
+	my $identifiers = $signdata->{'Identifier'};
+	if ($identifiers && ${$identifiers}[0] eq "com.apple.".$_) {
+	    return 1;
+	}
+    }
+    return 0;
+}
+
 sub examineprocess {
-    my ($pid) = @_;
+    my ($pid, $cmd) = @_;
     return if $pids{$pid};
 
     my $status = "pid: $pid";
     print chr(8) . " [$status]";
-    if ($hideapple && $appleanchorcheck) {
-	my $applecsrc = system('codesign -R="anchor apple" -v ' . $pid . ' > /dev/null 2>&1');
-	$applecsrc >>= 8;
-	if ($applecsrc == 0) {
-	    next;
-	}
-    }
+
     my @signdata = split /\n/, `codesign -dvvv "$pid" 2>&1`;
 
     my $csargs = '';
@@ -89,14 +88,18 @@ sub examineprocess {
 	    push @{$signdata{$key}}, $value;
 	}
     }
+
     my $executable = ${$signdata{"Executable"}}[0];
     if ($executable) {
 	print chr(8) x (length($status)+3);
 	$status .= " ($executable)";
 	print " [$status]";
     } else {
-	#print "\nNo executable information for pid $pid\n";
-	$executable = "???";
+	if ($cmd) {
+	    $executable = $cmd;
+	} else {
+	    $executable = "<executable unknown>";
+	}
     }
     my $csrc = system("codesign $csargs -v $pid > /dev/null 2>&1");
     $csrc >>= 8;
@@ -105,13 +108,24 @@ sub examineprocess {
     $ps{$psn}{'executable'} = $executable;
     $ps{$psn}{'pid'} = $pid;
     $ps{$psn}{'signdata'} = \%signdata;
-    $pids{$pid} = $ps{$psn};
     my $path = "";
     $path = join('/', @{$ps{$psn}{'signdata'}{'Authority'}}) if $ps{$psn}{'signdata'}{'Authority'};
+
+    for (@hiddenchains) {
+	if ($_ eq $path && !isinterpreter(\%signdata)) {
+	    print chr(8) x (length($status) + 2);
+	    print ' ' x (length($status) + 2);
+	    print chr(8) x (length($status) + 2);
+	    return;
+	}
+    }
+
+    $pids{$pid} = $ps{$psn};
     $ps{$psn}{'signpath'} = $path;
     $last_validation_failure{$path} = $csrc;
     $process_signed_by{$path} = [ ] unless $process_signed_by{$path};
     push @{$process_signed_by{$path}}, $ps{$psn};
+
     print chr(8) x (length($status) + 2);
     print ' ' x (length($status) + 2);
     print chr(8) x (length($status) + 2);
@@ -122,8 +136,8 @@ if ($stage1) {
     open LAUNCHCTL, "launchctl list|";
     while (<LAUNCHCTL>) {
 	next unless /^[0-9]/;
-	my ($pid) = split /[ \t]+/;
-	examineprocess($pid);
+	my ($pid, undef, $cmd) = split /[ \t]+/;
+	examineprocess($pid, $cmd);
     }
     close LAUNCHCTL;
 
@@ -136,10 +150,11 @@ if ($stage2) {
     print 'Examining all processes… ';
     open PS, "ps -ax -o pid,comm|";
     while (<PS>) {
+	chomp;
 	s/^[ \t]+//;
 	next if /^PID/;
 	my ($pid, $cmd) = split / +/, $_, 2;
-	examineprocess($pid);
+	examineprocess($pid, $cmd);
     }
     close PS;
 
@@ -156,9 +171,6 @@ CHAIN: for (sort keys %process_signed_by) {
     my $path = $_;
     my @psis = @{$process_signed_by{$path}};
     my $hidden = 0;
-    for (@hiddenchains) {
-	next CHAIN if $_ eq $path;
-    }
     print "\n" unless $first;
     $first = 0 if $first;
     if ($path) {
@@ -177,19 +189,34 @@ CHAIN: for (sort keys %process_signed_by) {
 	if (!$unsigned_in_summary) {
 	    next;
 	}
-	print "Unsigned or self-signed processes:\n";
+	print "Unsigned or self-signed processes, or processes that died during execution:\n";
     }
+    my @repeatedpids;
     for (sort { $a->{'executable'} cmp $b->{'executable'} } @psis) {
 	my %p = %{$_};
 	if ($lastapp eq $p{'executable'}) {
 	    $apprepeatcount++;
+	    push @repeatedpids, $p{'pid'};
 	} else {
 	    print color 'blue' if $color;
 	    if ($apprepeatcount > 0) {
-		print "\t (x" . ($apprepeatcount+1) . ")\n";
+		print "\t (x" . ($apprepeatcount+1) . "): ";
+		print join (', ', @repeatedpids);
+		print "\n";
+		@repeatedpids = ();
 	    }
 	    $apprepeatcount=0;
 	    print "\t" . $p{'executable'};
+
+	    if (isinterpreter($p{'signdata'})) {
+		print color 'red' if $color;
+		print (" (interpreter process)");
+		if ($p{'pid'} == $$) {
+		    print color 'yellow' if $color;
+		    print " (me!)";
+		}
+	    }
+
 	    if ($p{'csrc'} == 3 && $#{$p{'signdata'}{'Authority'}} == -1) {
 		print color 'yellow';
 		print (" (self-signed)");
@@ -201,7 +228,10 @@ CHAIN: for (sort keys %process_signed_by) {
 	$lastapp = $p{'executable'};
     }
     if ($apprepeatcount > 0) {
-	print "\t (x" . ($apprepeatcount+1) . ")\n";
+	print "\t (x" . ($apprepeatcount+1) . "): ";
+	print join (', ', @repeatedpids);
+	print "\n";
+
 	$lastapp = ""; $apprepeatcount = 0;
     }
 }
