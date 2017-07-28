@@ -3,9 +3,6 @@
 # This program uses the codesign(1) program to validate the signature
 # of all running processes, as well as printing them grouped by certificate
 # chain.
-#
-# on x86_64 systems, run with:
-#   VERSIONER_PERL_PREFER_32_BIT=yes ./procsign.pl
 
 # TODO: option to show interpreters such as Perl even with --hide-apple
 # because they may run arbitrary unsigned code
@@ -50,9 +47,7 @@ for (@ARGV) {
 }
 if ($optc) {
     print "Usage:\n";
-    print "\t$0 [--hide-apple] [--no-color] [no-unsigned-summary] [--in-session]\n";
-    print "\n(you may have to set the environment variable
-VERSIONER_PERL_PREFER_32_BIT=yes on an x86_64 machine)\n";
+    print "\t$0 [--hide-apple] [--no-color] [--no-unsigned-summary] [--in-session]\n";
     exit 1;
 }
 
@@ -65,34 +60,12 @@ my %last_validation_failure;
 my %ps;
 my %pids;
 
-sub executable_from_pid {
-    my $pid = shift;
-    open LSOF, "lsof -p $pid|";
-    while (<LSOF>) {
-	my ($cmd, $pid, $user, $fd, $type, $device, $size, $node, $name) = split /[ \t]+/, $_, 9;
-	if ($fd eq "txt") {
-	    chomp $name;
-	    close LSOF;
-	    return $name;
-	}
-    }
-    close LSOF;
-    return "";
-}
-
-sub spin_wheel {
-    print chr(8);
-    print color $colors[$cid++] if $color;
-    print $wheel[$wid++];
-    $wid = 0 if ($wid > $#wheel);
-    $cid = 0 if ($cid > $#colors);
-    print color 'reset' if $color;
-}
-
 sub examineprocess {
-    my ($psn, $pid, $executable) = @_;
+    my ($pid) = @_;
     return if $pids{$pid};
 
+    my $status = "pid: $pid";
+    print chr(8) . " [$status]";
     if ($hideapple && $appleanchorcheck) {
 	my $applecsrc = system('codesign -R="anchor apple" -v ' . $pid . ' > /dev/null 2>&1');
 	$applecsrc >>= 8;
@@ -100,27 +73,38 @@ sub examineprocess {
 	    next;
 	}
     }
-    my @signdata = split /\n/, `codesign -dvvv "$executable" 2>&1`;
+    my @signdata = split /\n/, `codesign -dvvv "$pid" 2>&1`;
 
     my $csargs = '';
     if ($warnuntrusted) {
 	$csargs .= '-R="anchor trusted"';
     }
 
-    my $csrc = system("codesign $csargs -v $pid > /dev/null 2>&1");
-    $csrc >>= 8;
-
+    my %signdata;
     for (@signdata) {
 	chomp;
 	my ($key, $value) = split /=/, $_, 2;
-	$ps{$psn}{'signdata'}{$key} = [ ] unless $ps{$psn}{'signdata'}{$key};
+	$signdata{$key} = [ ] unless $signdata{$key};
 	if ($value && $value ne "") {
-	    push @{$ps{$psn}{'signdata'}{$key}}, $value;
+	    push @{$signdata{$key}}, $value;
 	}
     }
+    my $executable = ${$signdata{"Executable"}}[0];
+    if ($executable) {
+	print chr(8) x (length($status)+3);
+	$status .= " ($executable)";
+	print " [$status]";
+    } else {
+	#print "\nNo executable information for pid $pid\n";
+	$executable = "???";
+    }
+    my $csrc = system("codesign $csargs -v $pid > /dev/null 2>&1");
+    $csrc >>= 8;
+    my $psn = $pid . "_" . $executable;
     $ps{$psn}{'csrc'} = $csrc;
     $ps{$psn}{'executable'} = $executable;
     $ps{$psn}{'pid'} = $pid;
+    $ps{$psn}{'signdata'} = \%signdata;
     $pids{$pid} = $ps{$psn};
     my $path = "";
     $path = join('/', @{$ps{$psn}{'signdata'}{'Authority'}}) if $ps{$psn}{'signdata'}{'Authority'};
@@ -128,17 +112,20 @@ sub examineprocess {
     $last_validation_failure{$path} = $csrc;
     $process_signed_by{$path} = [ ] unless $process_signed_by{$path};
     push @{$process_signed_by{$path}}, $ps{$psn};
+    print chr(8) x (length($status) + 2);
+    print ' ' x (length($status) + 2);
+    print chr(8) x (length($status) + 2);
 }
 
 if ($stage1) {
-    require Mac::Processes;
-    print 'Examining running processes... (stage 1)  ';
-    while ( ($psn, $psi) = each(%Process) ) {
-	my $executable = $psi->processAppSpec;
-	my $pid = GetProcessPID($psn);
-	spin_wheel;
-	examineprocess($psn, $pid, $executable);
+    print 'Examining processes in current session…  ';
+    open LAUNCHCTL, "launchctl list|";
+    while (<LAUNCHCTL>) {
+	next unless /^[0-9]/;
+	my ($pid) = split /[ \t]+/;
+	examineprocess($pid);
     }
+    close LAUNCHCTL;
 
     print chr(8) x 42;
     print ' ' x 42;
@@ -146,19 +133,13 @@ if ($stage1) {
 }
 
 if ($stage2) {
-    print 'Examining running processes... (stage 2)  ';
+    print 'Examining all processes… ';
     open PS, "ps -ax -o pid,comm|";
     while (<PS>) {
 	s/^[ \t]+//;
 	next if /^PID/;
 	my ($pid, $cmd) = split / +/, $_, 2;
-	die "invalid pid for executable $pid" unless $pid;
-	my $executable = executable_from_pid($pid);
-	print STDERR chr(8)."\nExecutable \"$executable\" for pid $pid not found (process or file may be gone)\n" unless -f $executable;
-
-	my $psn = $pid . "_" . $executable;
-	spin_wheel;
-	examineprocess($psn, $pid, $executable);
+	examineprocess($pid);
     }
     close PS;
 
