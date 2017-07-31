@@ -65,6 +65,41 @@ sub isinterpreter {
     return 0;
 }
 
+sub decorated_pid {
+    my ($pid) = @_;
+    my @fds = proc_standard_fds($pid);
+
+    if (my $ttyfd = fds_contain_tty(@fds)) {
+        return "$pid (".$ttyfd.")";
+    } else {
+	return "$pid";
+    }
+}
+
+sub fds_contain_tty {
+    for (@_) {
+	next if !$_ || /^$/;
+	if (/^\/dev\/tty[0-9a-z]+$/) {
+	    s/^\/dev\///;
+	    return $_;
+	}
+    }
+    return 0;
+}
+
+sub proc_standard_fds {
+    my ($pid) = @_;
+    open LSOF, "lsof -p $pid -a -d 0,1,2|";
+    my @fds;
+    while (<LSOF>) {
+	chomp;
+	my ($cmd, $pid, $user, $fd, $type, $device, $ffoset, $node, $name) = split /[ \t]+/;
+	next if $cmd eq "COMMAND";
+	push @fds, $name;
+    }
+    return @fds;
+}
+
 sub clearline {
     my ($len) = @_;
     print chr(8) x $len;
@@ -202,6 +237,7 @@ CHAIN: for (sort keys %process_signed_by) {
 	    print color 'blue' if $color;
 	    if ($apprepeatcount > 0) {
 		print "\t (x" . ($apprepeatcount+1) . "): ";
+		$_ = decorated_pid($_) for (@repeatedpids);
 		print join (', ', @repeatedpids);
 		print "\n";
 		@repeatedpids = ();
@@ -223,13 +259,14 @@ CHAIN: for (sort keys %process_signed_by) {
 		print (" (self-signed)");
 	    }
 	    print color 'reset' if $color;
-	    print " (pid " .$p{'pid'}. ")\n";
+	    print " (pid " . decorated_pid($p{'pid'}) . ")\n";
 
 	}
 	$lastapp = $p{'executable'};
     }
     if ($apprepeatcount > 0) {
 	print "\t (x" . ($apprepeatcount+1) . "): ";
+	$_ = decorated_pid($_) for (@repeatedpids);
 	print join (', ', @repeatedpids);
 	print "\n";
 
