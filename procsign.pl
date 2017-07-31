@@ -65,6 +65,13 @@ sub isinterpreter {
     return 0;
 }
 
+sub clearline {
+    my ($len) = @_;
+    print chr(8) x $len;
+    print ' ' x $len;
+    print chr(8) x $len;
+}
+
 sub examineprocess {
     my ($pid, $cmd) = @_;
     return if $pids{$pid};
@@ -113,12 +120,12 @@ sub examineprocess {
 
     for (@hiddenchains) {
 	if ($_ eq $path && !isinterpreter(\%signdata)) {
-	    print chr(8) x (length($status) + 2);
-	    print ' ' x (length($status) + 2);
-	    print chr(8) x (length($status) + 2);
+	    clearline(length($status)+2);
 	    return;
 	}
     }
+
+    # lsof -p 15460 -a -d 0,1,2
 
     $pids{$pid} = $ps{$psn};
     $ps{$psn}{'signpath'} = $path;
@@ -126,9 +133,7 @@ sub examineprocess {
     $process_signed_by{$path} = [ ] unless $process_signed_by{$path};
     push @{$process_signed_by{$path}}, $ps{$psn};
 
-    print chr(8) x (length($status) + 2);
-    print ' ' x (length($status) + 2);
-    print chr(8) x (length($status) + 2);
+    clearline(length($status)+2);
 }
 
 if ($stage1) {
@@ -141,9 +146,7 @@ if ($stage1) {
     }
     close LAUNCHCTL;
 
-    print chr(8) x 42;
-    print ' ' x 42;
-    print chr(8) x 42;
+    clearline(42);
 }
 
 if ($stage2) {
@@ -158,9 +161,7 @@ if ($stage2) {
     }
     close PS;
 
-    print chr(8) x 42;
-    print ' ' x 42;
-    print chr(8) x 42;
+    clearline(42);
 }
 
 
