@@ -16,6 +16,7 @@ my $appleanchorcheck = 1;
 my $optc = $#ARGV + 1;
 my $stage1 = 0;
 my $stage2 = 1;
+my $psargs = "-a";
 for (@ARGV) {
     if ($_ eq "--hide-apple") {
 	push @hiddenchains, "Software Signing/Apple Code Signing Certification Authority/Apple Root CA";
@@ -27,6 +28,10 @@ for (@ARGV) {
     }
     if ($_ eq "--no-color") {
 	$color = 0;
+	$optc--;
+    }
+    if ($_ eq "--own") {
+	$psargs = "-U " . $ENV{"USER"};
 	$optc--;
     }
     if ($_ eq "--no-unsigned-summary") {
@@ -41,7 +46,7 @@ for (@ARGV) {
 }
 if ($optc) {
     print "Usage:\n";
-    print "\t$0 [--hide-apple] [--no-color] [--no-unsigned-summary] [--in-session]\n";
+    print "\t$0 [--hide-apple] [--no-color] [--no-unsigned-summary] [--in-session] [--own]\n";
     exit 1;
 }
 
@@ -186,7 +191,7 @@ if ($stage1) {
 
 if ($stage2) {
     print 'Examining all processes… ';
-    open PS, "ps -ax -o pid,comm|";
+    open PS, "ps -x -o pid,comm $psargs|";
     while (<PS>) {
 	chomp;
 	s/^[ \t]+//;
