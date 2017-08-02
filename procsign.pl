@@ -219,8 +219,8 @@ CHAIN: for (sort keys %process_signed_by) {
 	print color 'green' if $color;
 	print "$path";
 	if ($last_validation_failure{$path} == 3) {
-	    print color 'red' if $color;
-	    print ' (self-signed or untrusted CA)';
+	    print color 'yellow' if $color;
+	    print " (one or more invalid signatures)";
 	} else {
 	    print color 'green' if $color;
 	}
@@ -262,6 +262,9 @@ CHAIN: for (sort keys %process_signed_by) {
 	    if ($p{'csrc'} == 3 && $#{$p{'signdata'}{'Authority'}} == -1) {
 		print color 'yellow';
 		print (" (self-signed)");
+	    } elsif ($p{'csrc'} == 3) {
+		print color 'red' if $color;
+		print " (invalid signature)";
 	    }
 	    print color 'reset' if $color;
 	    print " (pid " . decorated_pid($p{'pid'}) . ")\n";
