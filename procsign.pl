@@ -94,7 +94,7 @@ sub fds_contain_tty {
 
 sub proc_standard_fds {
     my ($pid) = @_;
-    open LSOF, "lsof -p $pid -a -d 0,1,2|";
+    open LSOF, "lsof -p $pid -a -d 0,1,2 2>/dev/null |";
     my @fds;
     while (<LSOF>) {
 	chomp;
